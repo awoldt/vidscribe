@@ -1,4 +1,97 @@
+# Env / secrets
 .env
+.env.*
+*.key
+*.pem
+*.crt
+*.secret
+
+# Audio
 *.mp3
+*.wav
+*.aac
+*.m4a
+*.flac
+*.ogg
+*.opus
+*.wma
+*.aiff
+*.alac
+
+# Video
 *.mp4
+*.mov
 *.MOV
+*.mkv
+*.avi
+*.webm
+*.flv
+*.wmv
+*.mpeg
+*.mpg
+*.3gp
+*.3g2
+*.m4v
+*.ts
+
+# Subtitles / transcripts
+*.srt
+*.vtt
+*.ass
+*.ssa
+*.txt
+*.json
+*.csv
+
+# Images / frames
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.bmp
+*.tiff
+*.svg
+
+# ffmpeg temp / outputs
+*.log
+*.tmp
+*.part
+*.cache
+*.segments
+chunk_*
+frames_*
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Go build artifacts
+bin/
+dist/
+build/
+*.exe
+*.out
+*.test
+*.prof
+
+# Node (if ever used)
+node_modules/
+
+# Docker
+*.pid
