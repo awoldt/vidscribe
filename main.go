@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -12,8 +13,16 @@ import (
 	"google.golang.org/genai"
 )
 
-func main() {
+type Schema struct {
+	Language string `json:"language"`
+	Segments []struct {
+		Start int    `json:"start"`
+		End   int    `json:"end"`
+		Text  string `json:"text"`
+	} `json:"segments"`
+}
 
+func main() {
 	cmd := &cli.Command{
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -96,10 +105,22 @@ func main() {
 				ctx,
 				"gemini-3-flash-preview",
 				contents,
-				nil, // put a response schema here evenautlaly
+				&genai.GenerateContentConfig{
+					ResponseMIMEType: "application/json",
+					ResponseSchema:   TranscriptSchema,
+				},
 			)
 
 			fmt.Println(result.Text())
+
+			var structuredResponse Schema
+			err = json.Unmarshal([]byte(result.Text()), &structuredResponse)
+			if err != nil {
+				return fmt.Errorf("error while unmarshalling gemini response into json")
+			}
+
+			fmt.Println(structuredResponse)
+
 			return nil // END OF PROGRAM!
 		},
 	}
@@ -107,4 +128,26 @@ func main() {
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Fatal(err)
 	}
+}
+
+var TranscriptSchema = &genai.Schema{
+	Type: genai.TypeObject,
+	Properties: map[string]*genai.Schema{
+		"language": {
+			Type: genai.TypeString,
+		},
+		"segments": {
+			Type: genai.TypeArray,
+			Items: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"start": {Type: genai.TypeNumber},
+					"end":   {Type: genai.TypeNumber},
+					"text":  {Type: genai.TypeString},
+				},
+				Required: []string{"start", "end", "text"},
+			},
+		},
+	},
+	Required: []string{"language", "segments"},
 }
