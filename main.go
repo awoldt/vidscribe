@@ -7,7 +7,9 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v3"
 	"google.golang.org/genai"
@@ -81,6 +83,11 @@ func main() {
 				return fmt.Errorf("%s does not exist in current directory", inputFile)
 			}
 
+			spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
+			spinner.Prefix = "Transcoding audio... "
+			spinner.Start()
+			defer spinner.Stop()
+
 			// run ffmpeg to conver input mp4 file to mp3
 			cmd := exec.Command(
 				"ffmpeg",
@@ -92,6 +99,8 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("%v\nerror while converting %s to audio format", err.Error(), inputFile)
 			}
+
+			spinner.Prefix = "Transcribing audio... "
 
 			client, err := genai.NewClient(ctx, &genai.ClientConfig{
 				APIKey: apiKey,
@@ -137,6 +146,8 @@ func main() {
 				return fmt.Errorf("%v\nerrro while saving srt file", err.Error())
 			}
 
+			spinner.Prefix = "Adding subtitles overlay... "
+
 			// now that we have the srt file, get ffmpeg to add subtitles
 			// to the original video file
 			cmd = exec.Command("ffmpeg",
@@ -152,6 +163,7 @@ func main() {
 				return fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error())
 			}
 
+			spinner.FinalMSG = "Successfully transcribed video!\n"
 			return nil // END OF PROGRAM!
 		},
 	}
