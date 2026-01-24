@@ -16,9 +16,9 @@ import (
 type Schema struct {
 	Language string `json:"language"`
 	Segments []struct {
-		Start int    `json:"start"`
-		End   int    `json:"end"`
-		Text  string `json:"text"`
+		Start float64 `json:"start"`
+		End   float64 `json:"end"`
+		Text  string  `json:"text"`
 	} `json:"segments"`
 }
 
@@ -29,6 +29,19 @@ func main() {
 				Name:     "input",
 				Usage:    "The input video to turn into audio",
 				Required: true,
+			},
+			&cli.StringFlag{
+				Name:        "model",
+				Usage:       "Underlying gemini model to use",
+				Value:       "flash",
+				DefaultText: "flash",
+				Required:    false,
+				Validator: func(s string) error {
+					if s != "pro" && s != "flash" {
+						return fmt.Errorf("%s is not a valid model", s)
+					}
+					return nil
+				},
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
@@ -71,6 +84,7 @@ func main() {
 			// run ffmpeg to conver input mp4 file to mp3
 			cmd := exec.Command(
 				"ffmpeg",
+				"-y", // this will overwrite the output.mp3
 				"-i", inputFile,
 				"output.mp3",
 			)
@@ -94,16 +108,17 @@ func main() {
 			)
 
 			parts := []*genai.Part{
-				genai.NewPartFromText("Generate a transcript of the speech."),
+				genai.NewPartFromText("Generate a transcript of the audio."),
 				genai.NewPartFromURI(uploadedFile.URI, uploadedFile.MIMEType),
 			}
 			contents := []*genai.Content{
 				genai.NewContentFromParts(parts, genai.RoleUser),
 			}
 
+			model := c.String("model")
 			result, _ := client.Models.GenerateContent(
 				ctx,
-				"gemini-3-flash-preview",
+				fmt.Sprintf("gemini-3-%v-preview", model),
 				contents,
 				&genai.GenerateContentConfig{
 					ResponseMIMEType: "application/json",
@@ -111,16 +126,13 @@ func main() {
 				},
 			)
 
-			fmt.Println(result.Text())
-
 			var structuredResponse Schema
 			err = json.Unmarshal([]byte(result.Text()), &structuredResponse)
 			if err != nil {
-				return fmt.Errorf("error while unmarshalling gemini response into json")
+				return fmt.Errorf("%v\nerror while unmarshalling gemini response into json", err.Error())
 			}
 
-			fmt.Println(structuredResponse)
-
+			GenerateSrtFile(&structuredResponse)
 			return nil // END OF PROGRAM!
 		},
 	}
