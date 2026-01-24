@@ -87,6 +87,7 @@ func main() {
 			spinner.Prefix = "Transcoding audio... "
 			spinner.Start()
 			defer spinner.Stop()
+			startTime := time.Now()
 
 			// run ffmpeg to conver input mp4 file to mp3
 			cmd := exec.Command(
@@ -163,7 +164,7 @@ func main() {
 				return fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error())
 			}
 
-			spinner.FinalMSG = "Successfully transcribed video!\n"
+			spinner.FinalMSG = fmt.Sprintf("Successfully transcribed video in %v seconds\n", fmt.Sprintf("%.2f", time.Since(startTime).Seconds()))
 			return nil // END OF PROGRAM!
 		},
 	}
