@@ -132,7 +132,26 @@ func main() {
 				return fmt.Errorf("%v\nerror while unmarshalling gemini response into json", err.Error())
 			}
 
-			GenerateSrtFile(&structuredResponse)
+			err = GenerateSrtFile(&structuredResponse)
+			if err != nil {
+				return fmt.Errorf("%v\nerrro while saving srt file", err.Error())
+			}
+
+			// now that we have the srt file, get ffmpeg to add subtitles
+			// to the original video file
+			cmd = exec.Command("ffmpeg",
+				"-y",
+				"-i", inputFile,
+				"-vf",
+				"subtitles=subs.srt",
+				"output.mp4",
+			)
+
+			err = cmd.Run()
+			if err != nil {
+				return fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error())
+			}
+
 			return nil // END OF PROGRAM!
 		},
 	}

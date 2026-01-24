@@ -1,3 +1,5 @@
+*.srt
+
 # Env / secrets
 .env
 .env.*

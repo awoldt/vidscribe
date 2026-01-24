@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 )
 
-func GenerateSrtFile(transcript *Schema) {
+func GenerateSrtFile(transcript *Schema) error {
 	// take in the gemini response and create a
 	// valid formatted SRT file
 
@@ -23,13 +24,16 @@ func GenerateSrtFile(transcript *Schema) {
 		sb.WriteString(fmt.Sprintf("%v --> %v\n", start, end))
 
 		// TEXT
-		sb.WriteString("- " + v.Text)
-
-		///////////////////////////////
-		fmt.Println(sb.String())
-
-		sb.Reset()
+		sb.WriteString("- " + v.Text + "\n")
 	}
+
+	// take the SRT formatted string and save
+	err := os.WriteFile("subs.srt", []byte(sb.String()), 0666)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getTimestamp(time float64) string {
