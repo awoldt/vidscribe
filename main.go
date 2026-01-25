@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -56,34 +57,36 @@ func main() {
 			}
 			apiKey := os.Getenv("GOOGLE_API_KEY")
 			if apiKey == "" {
-				return fmt.Errorf(
-					"GOOGLE_API_KEY is not set.\n\n" +
-						"Create an API key:\n" +
-						"  1. Go to https://ai.google.dev\n" +
-						"  2. Create a project (or select an existing one)\n" +
-						"  3. Generate an API key\n\n",
-				)
+				return fmt.Errorf("GOOGLE_API_KEY is not set")
 			}
 
 			inputFile := c.String("input")
-
 			// make sure input video is present
 			if _, err := os.Stat(inputFile); err != nil {
 				return fmt.Errorf("%s does not exist in current directory", inputFile)
 			}
 
 			spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
+			defer spinner.Stop()
 			spinner.Prefix = "Transcoding audio... "
 			spinner.Start()
-			defer spinner.Stop()
+
 			startTime := time.Now()
 
-			// run ffmpeg to conver input mp4 file to mp3
+			// create a tmp folder to place all files while program is running
+			tempDirPath, err := os.MkdirTemp("", "transcribe-")
+			if err != nil {
+				return fmt.Errorf("error while creating temp folder")
+			}
+			defer os.RemoveAll(tempDirPath) // clean up the tmp file when program done
+
+			// run ffmpeg to convert input file to mp3
+			outputAudioPath := filepath.Join(tempDirPath, "audio.mp3")
 			cmd := exec.Command(
 				"ffmpeg",
-				"-y", // this will overwrite the output.mp3
+				"-y", // this will overwrite the output video if already exists
 				"-i", inputFile,
-				"output.mp3",
+				outputAudioPath,
 			)
 			err = cmd.Run()
 			if err != nil {
@@ -91,12 +94,12 @@ func main() {
 			}
 
 			spinner.Prefix = "Transcribing audio... "
-			structuredResponse, err := TranscribeVideo(ctx, apiKey, c)
+			structuredResponse, err := TranscribeVideo(ctx, apiKey, c, outputAudioPath)
 			if err != nil {
 				return fmt.Errorf("%v\nerror while transcribing video", err.Error())
 			}
 
-			err = GenerateSrtFile(&structuredResponse)
+			strFilePath, err := GenerateSrtFile(&structuredResponse, tempDirPath)
 			if err != nil {
 				return fmt.Errorf("%v\nerrro while saving srt file", err.Error())
 			}
@@ -109,8 +112,8 @@ func main() {
 				"-y",
 				"-i", inputFile,
 				"-vf",
-				"subtitles=subs.srt",
-				"output.mp4",
+				"subtitles="+strFilePath,
+				"transcribed_"+inputFile,
 			)
 
 			err = cmd.Run()
@@ -118,7 +121,7 @@ func main() {
 				return fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error())
 			}
 
-			spinner.FinalMSG = fmt.Sprintf("Successfully transcribed video in %v seconds\n", fmt.Sprintf("%.2f", time.Since(startTime).Seconds()))
+			spinner.FinalMSG = fmt.Sprintf("Transcription completed in %v seconds\n", fmt.Sprintf("%.2f", time.Since(startTime).Seconds()))
 			return nil // END OF PROGRAM!
 		},
 	}

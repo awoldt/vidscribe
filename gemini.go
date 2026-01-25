@@ -40,7 +40,7 @@ var TranscriptSchema = &genai.Schema{
 	Required: []string{"language", "segments"},
 }
 
-func TranscribeVideo(ctx context.Context, apiKey string, c *cli.Command) (Schema, error) {
+func TranscribeVideo(ctx context.Context, apiKey string, c *cli.Command, audioPath string) (Schema, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,
 	})
@@ -48,10 +48,9 @@ func TranscribeVideo(ctx context.Context, apiKey string, c *cli.Command) (Schema
 		return Schema{}, fmt.Errorf("error while creating gemini client")
 	}
 
-	localAudioPath := "output.mp3"
 	uploadedFile, err := client.Files.UploadFromPath(
 		ctx,
-		localAudioPath,
+		audioPath,
 		nil,
 	)
 	if err != nil {
@@ -59,7 +58,9 @@ func TranscribeVideo(ctx context.Context, apiKey string, c *cli.Command) (Schema
 	}
 
 	parts := []*genai.Part{
-		genai.NewPartFromText("Generate a transcript of the audio."),
+		genai.NewPartFromText(`
+			Generate a transcript of the audio. Transcribe spoken human dialogue verbatim. For non-speech sounds (e.g., background noise or music), describe them in parentheses.
+		`),
 		genai.NewPartFromURI(uploadedFile.URI, uploadedFile.MIMEType),
 	}
 	contents := []*genai.Content{

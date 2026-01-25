@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
 
-func GenerateSrtFile(transcript *Schema) error {
+func GenerateSrtFile(transcript *Schema, tempPath string) (string, error) {
 	// take in the gemini response and create a
 	// valid formatted SRT file
 
@@ -28,12 +29,13 @@ func GenerateSrtFile(transcript *Schema) error {
 	}
 
 	// take the SRT formatted string and save
-	err := os.WriteFile("subs.srt", []byte(sb.String()), 0666)
+	outputPath := filepath.Join(tempPath, "subs.srt")
+	err := os.WriteFile(outputPath, []byte(sb.String()), 0666)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return outputPath, nil
 }
 
 func getTimestamp(time float64) string {
