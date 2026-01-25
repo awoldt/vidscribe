@@ -8,12 +8,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/briandowns/spinner"
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v3"
 )
+
+var validVideoFormats = []string{".mp4", ".mov", ".mkv", ".webm", ".avi"}
 
 func main() {
 	cmd := &cli.Command{
@@ -65,6 +69,12 @@ func main() {
 			// make sure input video is present
 			if _, err := os.Stat(inputFile); err != nil {
 				return fmt.Errorf("%s does not exist in current directory", inputFile)
+			}
+			if fileExt := filepath.Ext(inputFile); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
+				return fmt.Errorf(
+					"unsupported input file type. Supported formats: %s",
+					strings.Join(validVideoFormats, ", "),
+				)
 			}
 
 			spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
