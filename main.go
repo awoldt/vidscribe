@@ -66,7 +66,7 @@ func main() {
 			}
 
 			inputFile := c.String("input")
-			// make sure input video is present
+			// make sure input video is present in root directory
 			if _, err := os.Stat(inputFile); err != nil {
 				return fmt.Errorf("%s does not exist in current directory", inputFile)
 			}
