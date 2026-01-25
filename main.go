@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -101,28 +102,48 @@ func main() {
 
 			strFilePath, err := GenerateSrtFile(&structuredResponse, tempDirPath)
 			if err != nil {
-				return fmt.Errorf("%v\nerrro while saving srt file", err.Error())
+				return fmt.Errorf("%v\nerror while saving srt file", err.Error())
 			}
 
 			spinner.Prefix = "Adding subtitles overlay... "
 
 			// now that we have the srt file, get ffmpeg to add subtitles
 			// to the original video file
+			finalVideoPath := "transcribed_" + inputFile
+			tempVideoPath := filepath.Join(tempDirPath, finalVideoPath)
 			cmd = exec.Command("ffmpeg",
 				"-y",
 				"-i", inputFile,
 				"-vf",
 				"subtitles="+strFilePath,
-				"transcribed_"+inputFile,
+				tempVideoPath, // place in tmp folder
 			)
-
 			err = cmd.Run()
 			if err != nil {
 				return fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error())
 			}
 
+			// now copy that video out of the tmp folder and place in root
+			// SUCCESS!
+			in, err := os.Open(tempVideoPath)
+			if err != nil {
+				return fmt.Errorf("%v\nerror while copying tmp video to root directory", err.Error())
+			}
+			defer in.Close()
+
+			out, err := os.Create(finalVideoPath)
+			if err != nil {
+				return err
+			}
+			defer out.Close()
+
+			_, err = io.Copy(out, in)
+			if err != nil {
+				return err
+			}
+
 			spinner.FinalMSG = fmt.Sprintf("Transcription completed in %v seconds\n", fmt.Sprintf("%.2f", time.Since(startTime).Seconds()))
-			return nil // END OF PROGRAM!
+			return nil
 		},
 	}
 
