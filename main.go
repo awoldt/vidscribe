@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -12,17 +11,7 @@ import (
 	"github.com/briandowns/spinner"
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v3"
-	"google.golang.org/genai"
 )
-
-type Schema struct {
-	Language string `json:"language"`
-	Segments []struct {
-		Start float64 `json:"start"`
-		End   float64 `json:"end"`
-		Text  string  `json:"text"`
-	} `json:"segments"`
-}
 
 func main() {
 	cmd := &cli.Command{
@@ -102,44 +91,9 @@ func main() {
 			}
 
 			spinner.Prefix = "Transcribing audio... "
-
-			client, err := genai.NewClient(ctx, &genai.ClientConfig{
-				APIKey: apiKey,
-			})
+			structuredResponse, err := TranscribeVideo(ctx, apiKey, c)
 			if err != nil {
-				return fmt.Errorf("error while creating gemini client")
-			}
-
-			localAudioPath := "output.mp3"
-			uploadedFile, _ := client.Files.UploadFromPath(
-				ctx,
-				localAudioPath,
-				nil,
-			)
-
-			parts := []*genai.Part{
-				genai.NewPartFromText("Generate a transcript of the audio."),
-				genai.NewPartFromURI(uploadedFile.URI, uploadedFile.MIMEType),
-			}
-			contents := []*genai.Content{
-				genai.NewContentFromParts(parts, genai.RoleUser),
-			}
-
-			model := c.String("model")
-			result, _ := client.Models.GenerateContent(
-				ctx,
-				fmt.Sprintf("gemini-3-%v-preview", model),
-				contents,
-				&genai.GenerateContentConfig{
-					ResponseMIMEType: "application/json",
-					ResponseSchema:   TranscriptSchema,
-				},
-			)
-
-			var structuredResponse Schema
-			err = json.Unmarshal([]byte(result.Text()), &structuredResponse)
-			if err != nil {
-				return fmt.Errorf("%v\nerror while unmarshalling gemini response into json", err.Error())
+				return fmt.Errorf("%v\nerror while transcribing video", err.Error())
 			}
 
 			err = GenerateSrtFile(&structuredResponse)
@@ -172,26 +126,4 @@ func main() {
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Fatal(err)
 	}
-}
-
-var TranscriptSchema = &genai.Schema{
-	Type: genai.TypeObject,
-	Properties: map[string]*genai.Schema{
-		"language": {
-			Type: genai.TypeString,
-		},
-		"segments": {
-			Type: genai.TypeArray,
-			Items: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"start": {Type: genai.TypeNumber},
-					"end":   {Type: genai.TypeNumber},
-					"text":  {Type: genai.TypeString},
-				},
-				Required: []string{"start", "end", "text"},
-			},
-		},
-	},
-	Required: []string{"language", "segments"},
 }
