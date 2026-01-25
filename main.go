@@ -79,7 +79,7 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("error while creating temp folder")
 			}
-			defer os.RemoveAll(tempDirPath) // clean up the tmp file when program done
+			defer os.RemoveAll(tempDirPath) // clean up the tmp files when program done
 
 			// run ffmpeg to convert input file to mp3
 			outputAudioPath := filepath.Join(tempDirPath, "audio.mp3")
