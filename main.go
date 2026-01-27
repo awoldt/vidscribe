@@ -111,10 +111,8 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 		return fmt.Errorf("%v\nthere was an error while making output directory", err.Error())
 	}
 
-	success := 0
 	spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
 	defer spinner.Stop()
-	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, len(files))
 	spinner.Start()
 
 	// create a tmp folder to place all files while program is running
@@ -128,6 +126,10 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	// use go routines fast af
 	var wg sync.WaitGroup
 	var errs []error
+	var mu sync.RWMutex
+	success := 0
+	numOfVids := len(files)
+	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
 	for _, file := range files {
 		fullPath := filepath.Join(inputDirPath, file.Name())
 		if fileExt := filepath.Ext(fullPath); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
@@ -145,19 +147,25 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			)
 			err = cmd.Run()
 			if err != nil {
+				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while converting %s to audio format", err.Error(), fullPath))
+				mu.Unlock()
 				return
 			}
 
 			structuredResponse, err := TranscribeVideo(ctx, apiKey, c, outputAudioPath)
 			if err != nil {
+				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while transcribing video", err.Error()))
+				mu.Unlock()
 				return
 			}
 
 			strFilePath, err := GenerateSrtFile(&structuredResponse, tempDirPath)
 			if err != nil {
+				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while saving srt file", err.Error()))
+				mu.Unlock()
 				return
 			}
 
@@ -174,7 +182,9 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			)
 			err = cmd.Run()
 			if err != nil {
+				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error()))
+				mu.Unlock()
 				return
 			}
 
@@ -182,36 +192,45 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			// SUCCESS!
 			in, err := os.Open(tempVideoPath)
 			if err != nil {
+				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while copying tmp video to root directory", err.Error()))
+				mu.Unlock()
 				return
 			}
 			defer in.Close()
 
 			out, err := os.Create(finalVideoPath)
 			if err != nil {
+				mu.Lock()
 				errs = append(errs, err)
+				mu.Unlock()
 				return
 			}
 			defer out.Close()
 
 			_, err = io.Copy(out, in)
 			if err != nil {
+				mu.Lock()
 				errs = append(errs, err)
+				mu.Unlock()
 				return
 			}
 
+			mu.Lock()
 			success++
-			spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, len(files))
+			spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
+			mu.Unlock()
 		})
 	}
 	wg.Wait()
 	spinner.Stop()
 
 	if len(errs) > 0 {
+		mu.RLock()
 		for _, e := range errs {
 			fmt.Println(e.Error())
 		}
-		return errors.New("there were errors")
+		mu.RUnlock()
 	}
 
 	fmt.Printf("finished %v videos wiht %v errors", success, len(errs))
