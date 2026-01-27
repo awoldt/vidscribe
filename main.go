@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -79,6 +78,7 @@ func main() {
 					return err
 				}
 			}
+
 			return nil
 		},
 	}
@@ -96,14 +96,6 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	files, err := os.ReadDir(inputDirPath)
 	if err != nil {
 		return fmt.Errorf("%v\nthere was an error while reading the directory %v", err.Error(), inputDirPath)
-	}
-
-	// create a output folder to place all transcribed videos
-	outputPath := "./output"
-	os.RemoveAll(outputPath)
-	err = os.Mkdir(outputPath, 0644)
-	if err != nil {
-		return fmt.Errorf("%v\nthere was an error while making output directory", err.Error())
 	}
 
 	// create a tmp folder to place all files while program is running
@@ -127,24 +119,18 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	spinner.Start()
 
 	for _, file := range files {
-		fullPath := filepath.Join(inputDirPath, file.Name())
+		filename := file.Name()
+		fullPath := filepath.Join(inputDirPath, filename)
 		if fileExt := filepath.Ext(fullPath); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
 			continue
 		}
 
 		wg.Go(func() {
-			// run ffmpeg to convert input file to mp3
-			outputAudioPath := filepath.Join(tempDirPath, file.Name()+"_audio.mp3")
-			cmd := exec.Command(
-				"ffmpeg",
-				"-y",
-				"-i", fullPath,
-				outputAudioPath,
-			)
-			err = cmd.Run()
+			// convert video to mp3
+			outputAudioPath, err := VideoToMp3(tempDirPath, fullPath)
 			if err != nil {
 				mu.Lock()
-				errs = append(errs, fmt.Errorf("%v\nerror while converting %s to audio format", err.Error(), fullPath))
+				errs = append(errs, err)
 				mu.Unlock()
 				return
 			}
@@ -157,8 +143,8 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 				return
 			}
 
-			filename := strings.TrimSuffix(filepath.Base(fullPath), filepath.Ext(fullPath))
-			strFilePath, err := GenerateSrtFile(&structuredResponse, filename, tempDirPath)
+			filenameNoExt := strings.TrimSuffix(filepath.Base(fullPath), filepath.Ext(fullPath))
+			strFilePath, err := GenerateSrtFile(&structuredResponse, filenameNoExt, tempDirPath)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while saving srt file", err.Error()))
@@ -168,45 +154,16 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 
 			// now that we have the srt file, get ffmpeg to add subtitles
 			// to the original video file
-			tempVideoPath := filepath.Join(tempDirPath, "transcribed_"+file.Name())
-
-			cmd = exec.Command("ffmpeg",
-				"-y",
-				"-i", fullPath,
-				"-vf", fmt.Sprintf("subtitles='%s'", strFilePath),
-				tempVideoPath, // place in tmp folder
-			)
-			o, err := cmd.CombinedOutput()
-			if err != nil {
-				fmt.Println(string(o))
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error()))
-				mu.Unlock()
-				return
-			}
-
-			// now copy that video out of the tmp folder and place in root
-			// SUCCESS!
-			finalVideoPath := filepath.Join(outputPath, "transcribed_"+file.Name())
-			in, err := os.Open(tempVideoPath)
-			if err != nil {
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("%v\nerror while copying tmp video to root directory", err.Error()))
-				mu.Unlock()
-				return
-			}
-			defer in.Close()
-
-			out, err := os.Create(finalVideoPath)
+			tempVideoPath, err := ApplySubtitles(tempDirPath, fullPath, strFilePath)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
 				return
 			}
-			defer out.Close()
 
-			_, err = io.Copy(out, in)
+			// move the final file from tmp directory to root
+			err = os.Rename(tempVideoPath, "./transcribed_"+filename)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, err)
@@ -259,17 +216,10 @@ func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Comman
 	}
 	defer os.RemoveAll(tempDirPath) // clean up the tmp files when program done
 
-	// run ffmpeg to convert input file to mp3
-	outputAudioPath := filepath.Join(tempDirPath, "audio.mp3")
-	cmd := exec.Command(
-		"ffmpeg",
-		"-y", // this will overwrite the output video if already exists
-		"-i", inputPath,
-		outputAudioPath,
-	)
-	err = cmd.Run()
+	// convert video to mp3
+	outputAudioPath, err := VideoToMp3(tempDirPath, inputPath)
 	if err != nil {
-		return fmt.Errorf("%v\nerror while converting %s to audio format", err.Error(), inputPath)
+		return err
 	}
 
 	spinner.Prefix = "Transcribing audio... "
@@ -288,34 +238,13 @@ func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Comman
 
 	// now that we have the srt file, get ffmpeg to add subtitles
 	// to the original video file
-	finalVideoPath := "transcribed_" + inputPath
-	tempVideoPath := filepath.Join(tempDirPath, finalVideoPath)
-	cmd = exec.Command("ffmpeg",
-		"-y",
-		"-i", inputPath,
-		"-vf", fmt.Sprintf("subtitles='%s'", strFilePath),
-		tempVideoPath, // place in tmp folder
-	)
-	err = cmd.Run()
-	if err != nil {
-		return fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error())
-	}
-
-	// now copy that video out of the tmp folder and place in root
-	// SUCCESS!
-	in, err := os.Open(tempVideoPath)
-	if err != nil {
-		return fmt.Errorf("%v\nerror while copying tmp video to root directory", err.Error())
-	}
-	defer in.Close()
-
-	out, err := os.Create(finalVideoPath)
+	tempVideoPath, err := ApplySubtitles(tempDirPath, inputPath, strFilePath)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
-	_, err = io.Copy(out, in)
+	// move the final file from tmp directory to root
+	err = os.Rename(tempVideoPath, "./transcribed_"+inputPath)
 	if err != nil {
 		return err
 	}

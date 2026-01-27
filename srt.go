@@ -35,11 +35,7 @@ func GenerateSrtFile(transcript *Schema, filename, tempDirPath string) (string, 
 		return "", err
 	}
 
-	// ffmpeg filter flag path is a pain in the ass, escape this stuff
-	escaped := strings.ReplaceAll(outputPath, `\`, `\\`)
-	escaped = strings.ReplaceAll(escaped, ":", "\\:")
-
-	return escaped, nil
+	return outputPath, nil
 }
 
 func getTimestamp(time float64) string {
