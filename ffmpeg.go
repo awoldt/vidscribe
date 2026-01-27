@@ -19,6 +19,10 @@ func VideoToMp3(tempDirPath, fileinputPath string) (string, error) {
 		outputAudioPath,
 	)
 
+	// better performance
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
 	err := cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("%v\nerror while converting %s to audio format", err.Error(), fileinputPath)
@@ -42,9 +46,12 @@ func ApplySubtitles(tempDirPath, fileinputPath, strFilePath string) (string, err
 		"-vf", fmt.Sprintf("subtitles='%s'", escaped),
 		tempVideoPath, // place in tmp folder
 	)
-	o, err := cmd.CombinedOutput()
+	// better performance
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	err := cmd.Run()
 	if err != nil {
-		fmt.Println(string(o))
 		return "", fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error())
 	}
 

@@ -106,17 +106,32 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	defer os.RemoveAll(tempDirPath) // clean up the tmp files when program done
 
 	// loop through entire directory and transcribe each video
-	// use go routines fast af
+	// use "worker" goroutines to do all the video transcription
+	// and have a single goroutine that will update the spinner
 	var wg sync.WaitGroup
 	var errs []error
 	var mu sync.RWMutex
+	progress := make(chan struct{})
 	success := 0
 	numOfVids := len(files)
 
 	spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
-	defer spinner.Stop()
 	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
 	spinner.Start()
+
+	go func() {
+		for range progress {
+			mu.Lock()
+			success++
+			mu.Unlock()
+
+			spinner.Prefix = fmt.Sprintf(
+				"Transcoding video(s) %d of %d... ",
+				success,
+				numOfVids,
+			)
+		}
+	}()
 
 	for _, file := range files {
 		filename := file.Name()
@@ -171,14 +186,13 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 				return
 			}
 
-			mu.Lock()
-			success++
-			spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
-			mu.Unlock()
+			progress <- struct{}{}
 		})
 	}
+
 	wg.Wait()
-	spinner.Stop()
+	close(progress)
+	spinner.Stop() // make sure to stop spinner before printing final message
 
 	if len(errs) > 0 {
 		mu.RLock()
@@ -188,7 +202,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 		mu.RUnlock()
 	}
 
-	fmt.Printf("finished %v videos wiht %v errors", success, len(errs))
+	fmt.Printf("Processed %d videos successfully; %d failed\n", success, len(errs))
 
 	return nil
 }
