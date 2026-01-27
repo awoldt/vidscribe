@@ -9,9 +9,10 @@ import (
 	"strings"
 )
 
-func GenerateSrtFile(transcript *Schema, tempPath string) (string, error) {
+func GenerateSrtFile(transcript *Schema) (string, error) {
 	// take in the gemini response and create a
 	// valid formatted SRT file
+	// ffmpeg is a pain in the ass, dont save this srt file in temp folder, save in cwd to prevent errors
 
 	var sb strings.Builder
 	for i, v := range transcript.Segments {
@@ -29,7 +30,7 @@ func GenerateSrtFile(transcript *Schema, tempPath string) (string, error) {
 	}
 
 	// take the SRT formatted string and save
-	outputPath := filepath.Join(tempPath, "subs.srt")
+	outputPath := filepath.Join("./", "subs.srt")
 	err := os.WriteFile(outputPath, []byte(sb.String()), 0666)
 	if err != nil {
 		return "", err

@@ -4,13 +4,15 @@ go 1.25.1
 
 require github.com/urfave/cli/v3 v3.6.2
 
-require github.com/joho/godotenv v1.5.1
+require (
+	github.com/briandowns/spinner v1.23.2
+	google.golang.org/genai v1.43.0
+)
 
 require (
 	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
-	github.com/briandowns/spinner v1.23.2 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
@@ -25,7 +27,6 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	google.golang.org/genai v1.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/grpc v1.66.2 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect

@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v3"
 )
 
@@ -57,10 +56,6 @@ func main() {
 			}
 
 			// load env variable (need gemini api key to work)
-			err = godotenv.Load()
-			if err != nil {
-				return fmt.Errorf("error loading .env file in current directory")
-			}
 			apiKey := os.Getenv("GOOGLE_API_KEY")
 			if apiKey == "" {
 				return fmt.Errorf("GOOGLE_API_KEY is not set")
@@ -79,7 +74,7 @@ func main() {
 				}
 			} else {
 				// single video
-				err = transcribeFile(inputPath, "./", apiKey, ctx, c)
+				err = transcribeFile(inputPath, apiKey, ctx, c)
 				if err != nil {
 					return err
 				}
@@ -161,7 +156,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 				return
 			}
 
-			strFilePath, err := GenerateSrtFile(&structuredResponse, tempDirPath)
+			strFilePath, err := GenerateSrtFile(&structuredResponse)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while saving srt file", err.Error()))
@@ -171,8 +166,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 
 			// now that we have the srt file, get ffmpeg to add subtitles
 			// to the original video file
-			finalVideoPath := filepath.Join(outputPath, "transcribed_"+file.Name())
-			tempVideoPath := filepath.Join(tempDirPath, finalVideoPath)
+			tempVideoPath := filepath.Join(tempDirPath, "transcribed_"+file.Name())
 			cmd = exec.Command("ffmpeg",
 				"-y",
 				"-i", fullPath,
@@ -180,8 +174,9 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 				"subtitles="+strFilePath,
 				tempVideoPath, // place in tmp folder
 			)
-			err = cmd.Run()
+			o, err := cmd.CombinedOutput()
 			if err != nil {
+				fmt.Println(string(o))
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while adding subtitles to original video", err.Error()))
 				mu.Unlock()
@@ -190,6 +185,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 
 			// now copy that video out of the tmp folder and place in root
 			// SUCCESS!
+			finalVideoPath := filepath.Join(outputPath, "transcribed_"+file.Name())
 			in, err := os.Open(tempVideoPath)
 			if err != nil {
 				mu.Lock()
@@ -238,7 +234,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	return nil
 }
 
-func transcribeFile(inputPath, outputPath, apiKey string, ctx context.Context, c *cli.Command) error {
+func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Command) error {
 	// make sure its a valid video format
 	if fileExt := filepath.Ext(inputPath); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
 		return fmt.Errorf(
@@ -280,7 +276,7 @@ func transcribeFile(inputPath, outputPath, apiKey string, ctx context.Context, c
 		return fmt.Errorf("%v\nerror while transcribing video", err.Error())
 	}
 
-	strFilePath, err := GenerateSrtFile(&structuredResponse, tempDirPath)
+	strFilePath, err := GenerateSrtFile(&structuredResponse)
 	if err != nil {
 		return fmt.Errorf("%v\nerror while saving srt file", err.Error())
 	}
