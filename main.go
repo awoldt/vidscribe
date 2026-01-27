@@ -106,10 +106,6 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 		return fmt.Errorf("%v\nthere was an error while making output directory", err.Error())
 	}
 
-	spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
-	defer spinner.Stop()
-	spinner.Start()
-
 	// create a tmp folder to place all files while program is running
 	tempDirPath, err := os.MkdirTemp("", "transcribe-")
 	if err != nil {
@@ -124,7 +120,12 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	var mu sync.RWMutex
 	success := 0
 	numOfVids := len(files)
+
+	spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
+	defer spinner.Stop()
 	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
+	spinner.Start()
+
 	for _, file := range files {
 		fullPath := filepath.Join(inputDirPath, file.Name())
 		if fileExt := filepath.Ext(fullPath); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
@@ -156,7 +157,8 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 				return
 			}
 
-			strFilePath, err := GenerateSrtFile(&structuredResponse)
+			filename := strings.TrimSuffix(filepath.Base(fullPath), filepath.Ext(fullPath))
+			strFilePath, err := GenerateSrtFile(&structuredResponse, filename, tempDirPath)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("%v\nerror while saving srt file", err.Error()))
@@ -167,11 +169,11 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			// now that we have the srt file, get ffmpeg to add subtitles
 			// to the original video file
 			tempVideoPath := filepath.Join(tempDirPath, "transcribed_"+file.Name())
+
 			cmd = exec.Command("ffmpeg",
 				"-y",
 				"-i", fullPath,
-				"-vf",
-				"subtitles="+strFilePath,
+				"-vf", fmt.Sprintf("subtitles='%s'", strFilePath),
 				tempVideoPath, // place in tmp folder
 			)
 			o, err := cmd.CombinedOutput()
@@ -276,7 +278,8 @@ func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Comman
 		return fmt.Errorf("%v\nerror while transcribing video", err.Error())
 	}
 
-	strFilePath, err := GenerateSrtFile(&structuredResponse)
+	filename := strings.TrimSuffix(filepath.Base(inputPath), filepath.Ext(inputPath))
+	strFilePath, err := GenerateSrtFile(&structuredResponse, filename, tempDirPath)
 	if err != nil {
 		return fmt.Errorf("%v\nerror while saving srt file", err.Error())
 	}
@@ -290,8 +293,7 @@ func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Comman
 	cmd = exec.Command("ffmpeg",
 		"-y",
 		"-i", inputPath,
-		"-vf",
-		"subtitles="+strFilePath,
+		"-vf", fmt.Sprintf("subtitles='%s'", strFilePath),
 		tempVideoPath, // place in tmp folder
 	)
 	err = cmd.Run()
