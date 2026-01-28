@@ -156,11 +156,13 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	}()
 
 	for _, file := range files {
-		filename := file.Name()
-		fullPath := filepath.Join(inputDirPath, file.Name())
+		f := file.Name()
+		p := filepath.Join(inputDirPath, f)
 
 		// ROUTINE: processes videos
 		wg.Go(func() {
+			filename := f
+			fullPath := p
 			concurrentProcesses <- 1
 			defer func() { <-concurrentProcesses }()
 
