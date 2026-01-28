@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -114,16 +115,26 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	progress := make(chan struct{})
 	success := 0
 	numOfVids := len(files)
+	// only process a certain amount of videos at a time
+	// very cpu intensive, try not to fuck things up
+	// plus wont rate limit gemini
+	processingSize := 1
+	numOfCores := runtime.NumCPU()
+	if numOfCores >= 12 && numOfCores < 24 {
+		processingSize = 2
+	} else {
+		processingSize = 4
+	}
+	concurrentProcesses := make(chan int, processingSize)
 
 	spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
 	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
 	spinner.Start()
 
+	// ROUTINE: updates spinner
 	go func() {
 		for range progress {
-			mu.Lock()
 			success++
-			mu.Unlock()
 
 			spinner.Prefix = fmt.Sprintf(
 				"Transcoding video(s) %d of %d... ",
@@ -140,7 +151,11 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			continue
 		}
 
+		// ROUTINE: processes videos
 		wg.Go(func() {
+			concurrentProcesses <- 1
+			defer func() { <-concurrentProcesses }()
+
 			// convert video to mp3
 			outputAudioPath, err := VideoToMp3(tempDirPath, fullPath)
 			if err != nil {
@@ -187,6 +202,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			}
 
 			progress <- struct{}{}
+
 		})
 	}
 
@@ -195,11 +211,9 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	spinner.Stop() // make sure to stop spinner before printing final message
 
 	if len(errs) > 0 {
-		mu.RLock()
 		for _, e := range errs {
 			fmt.Println(e.Error())
 		}
-		mu.RUnlock()
 	}
 
 	fmt.Printf("Processed %d videos successfully; %d failed\n", success, len(errs))
