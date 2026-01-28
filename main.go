@@ -99,6 +99,15 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 		return fmt.Errorf("%v\nthere was an error while reading the directory %v", err.Error(), inputDirPath)
 	}
 
+	// remove all non video files
+	files = slices.DeleteFunc(files, func(file os.DirEntry) bool {
+		filename := file.Name()
+		if fileExt := filepath.Ext(filename); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
+			return true
+		}
+		return false
+	})
+
 	// create a tmp folder to place all files while program is running
 	tempDirPath, err := os.MkdirTemp("", "transcribe-")
 	if err != nil {
@@ -118,9 +127,11 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	// only process a certain amount of videos at a time
 	// very cpu intensive, try not to fuck things up
 	// plus wont rate limit gemini
-	processingSize := 1
+	processingSize := 0
 	numOfCores := runtime.NumCPU()
-	if numOfCores >= 12 && numOfCores < 24 {
+	if numOfCores < 12 {
+		processingSize = 1
+	} else if numOfCores >= 12 && numOfCores < 24 {
 		processingSize = 2
 	} else {
 		processingSize = 4
@@ -146,10 +157,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 
 	for _, file := range files {
 		filename := file.Name()
-		fullPath := filepath.Join(inputDirPath, filename)
-		if fileExt := filepath.Ext(fullPath); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
-			continue
-		}
+		fullPath := filepath.Join(inputDirPath, file.Name())
 
 		// ROUTINE: processes videos
 		wg.Go(func() {
