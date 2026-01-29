@@ -5,7 +5,8 @@ Vidscribe is a simple CLI that transcribes a single video or every supported vid
 ### What you’ll need
 
 - **ffmpeg installed and on your PATH**  
-  - macOS: `brew install ffmpeg`  
+  - macOS: `brew install ffmpeg`
+    - *Note: If you run into issues burning subtitles, you may need a version with `libass`. Use `brew install ffmpeg-full` and link it: `brew unlink ffmpeg && brew link --overwrite ffmpeg-full`*
   - Linux (Ubuntu/Debian): `sudo apt install ffmpeg`  
   - Windows: `winget install ffmpeg`  
 - **A Google Gemini API key** stored in the `GOOGLE_API_KEY` environment variable. Without it, the tool cannot call the Gemini transcription service.
