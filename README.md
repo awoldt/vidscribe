@@ -4,12 +4,39 @@ Vidscribe is a CLI tool that uses Google Gemini and `ffmpeg` to transcribe video
 
 ### What you’ll need
 
-- **ffmpeg installed and on your PATH**  
-  - macOS: `brew install ffmpeg`
-    - *Note: If you run into issues burning subtitles, you may need a version with `libass`. Use `brew install ffmpeg-full` and link it: `brew unlink ffmpeg && brew link --overwrite ffmpeg-full`*
-  - Linux (Ubuntu/Debian): `sudo apt install ffmpeg`  
-  - Windows: `winget install ffmpeg`  
-- **A Google Gemini API key** stored in the `GOOGLE_API_KEY` environment variable. Without it, the tool cannot call the Gemini transcription service.
+1. **Install ffmpeg** (required for video processing)
+
+   **macOS**
+   ```bash
+   brew install ffmpeg
+   # If you need libass for subtitles:
+   brew install ffmpeg-full && brew link --overwrite ffmpeg-full
+   ```
+
+   **Linux (Ubuntu/Debian)**
+   ```bash
+   sudo apt install ffmpeg
+   ```
+
+   **Windows**
+   ```powershell
+   winget install ffmpeg
+   ```
+
+2. **Google Gemini API Key**
+   Store your key in the `GOOGLE_API_KEY` environment variable.
+
+   **Set `GOOGLE_API_KEY` before running**
+
+   macOS/Linux:
+   ```bash
+   export GOOGLE_API_KEY="your_api_key_here"
+   ```
+
+   Windows PowerShell:
+   ```powershell
+   $Env:GOOGLE_API_KEY="your_api_key_here"
+   ```
 
 ### Supported inputs
 
@@ -28,15 +55,3 @@ Or point at a directory to transcribe everything inside:
 ```
 ./vidscribe --input path/to/video-directory
 ```
-
-### Environment reminders
-
-- Set `GOOGLE_API_KEY` before running. Example (macOS/Linux):
-  ```
-  export GOOGLE_API_KEY="your_api_key_here"
-  ```
-  On Windows PowerShell:
-  ```
-  $Env:GOOGLE_API_KEY="your_api_key_here"
-  ```
-- Ensure `ffmpeg` works from your terminal (`ffmpeg -version`).

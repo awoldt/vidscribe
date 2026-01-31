@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -89,23 +90,34 @@ func main() {
 }
 
 func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Command) error {
-	// transcribes an entire directory
-	// slightly different logic from single file
-	// so gets its own function
+	/*
+		transcribes an entire directory.
 
-	files, err := os.ReadDir(inputDirPath)
-	if err != nil {
-		return fmt.Errorf("%v\nthere was an error while reading the directory %v", err.Error(), inputDirPath)
-	}
+		uses slightly different logic than single-file transcription,
+		so this gets its own function.
+	*/
 
+	// read all nested files/dirs
 	// remove all non video files
-	files = slices.DeleteFunc(files, func(file os.DirEntry) bool {
-		filename := file.Name()
-		if fileExt := filepath.Ext(filename); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
-			return true
+	var validFiles []string
+	err := filepath.WalkDir(inputDirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		return false
+		if d.IsDir() {
+			return nil
+		}
+
+		// make sure a valid file
+		if !slices.Contains(validVideoFormats, strings.ToLower(filepath.Ext(path))) {
+			return nil
+		}
+		validFiles = append(validFiles, path)
+		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("failed to traverse directory and its subdirectories")
+	}
 
 	// create a tmp folder to place all files while program is running
 	tempDirPath, err := os.MkdirTemp("", "transcribe-")
@@ -120,18 +132,15 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	var errs []error
 	var mu sync.RWMutex
 	success := 0
-	numOfVids := len(files)
+	numOfVids := len(validFiles)
 
 	spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
 	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
 	spinner.Start()
 
-	for _, file := range files {
-		filename := file.Name()
-		fullPath := filepath.Join(inputDirPath, filename)
-
+	for _, fullpath := range validFiles {
 		// convert video to mp3
-		outputAudioPath, err := VideoToMp3(tempDirPath, fullPath)
+		outputAudioPath, err := VideoToMp3(tempDirPath, fullpath)
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, err)
@@ -147,7 +156,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			continue
 		}
 
-		filenameNoExt := strings.TrimSuffix(filepath.Base(fullPath), filepath.Ext(fullPath))
+		filenameNoExt := strings.TrimSuffix(filepath.Base(fullpath), filepath.Ext(fullpath))
 		strFilePath, err := GenerateSrtFile(&structuredResponse, filenameNoExt, tempDirPath)
 		if err != nil {
 			mu.Lock()
@@ -158,7 +167,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 
 		// now that we have the srt file, get ffmpeg to add subtitles
 		// to the original video file
-		tempVideoPath, err := ApplySubtitles(tempDirPath, fullPath, strFilePath)
+		tempVideoPath, err := ApplySubtitles(tempDirPath, fullpath, strFilePath)
 		if err != nil {
 			mu.Lock()
 			errs = append(errs, err)
@@ -166,6 +175,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 			continue
 		}
 
+		filename := filepath.Base(fullpath)
 		// move the final file from tmp directory to root
 		err = os.Rename(tempVideoPath, "./transcribed_"+filename)
 		if err != nil {
