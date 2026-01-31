@@ -126,9 +126,6 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	}
 	defer os.RemoveAll(tempDirPath) // clean up the tmp files when program done
 
-	// loop through entire directory and transcribe each video
-	// use "worker" goroutines to do all the video transcription
-	// and have a single goroutine that will update the spinner
 	var errs []error
 	var mu sync.RWMutex
 	success := 0
@@ -138,6 +135,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
 	spinner.Start()
 
+	// loop through entire directory and transcribe each video
 	for _, fullpath := range validFiles {
 		// convert video to mp3
 		outputAudioPath, err := VideoToMp3(tempDirPath, fullpath)
