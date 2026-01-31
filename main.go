@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -118,106 +117,72 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	// loop through entire directory and transcribe each video
 	// use "worker" goroutines to do all the video transcription
 	// and have a single goroutine that will update the spinner
-	var wg sync.WaitGroup
 	var errs []error
 	var mu sync.RWMutex
-	progress := make(chan struct{})
 	success := 0
 	numOfVids := len(files)
-	// only process a certain amount of videos at a time
-	// very cpu intensive, try not to fuck things up
-	// plus wont rate limit gemini
-	processingSize := 0
-	numOfCores := runtime.NumCPU()
-	if numOfCores < 12 {
-		processingSize = 1
-	} else if numOfCores >= 12 && numOfCores < 24 {
-		processingSize = 2
-	} else {
-		processingSize = 4
-	}
-	concurrentProcesses := make(chan int, processingSize)
 
 	spinner := spinner.New(spinner.CharSets[2], 100*time.Millisecond)
 	spinner.Prefix = fmt.Sprintf("Transcoding video(s) %v of %v... ", success, numOfVids)
 	spinner.Start()
 
-	// ROUTINE: updates spinner
-	go func() {
-		for range progress {
-			success++
-
-			spinner.Prefix = fmt.Sprintf(
-				"Transcoding video(s) %d of %d... ",
-				success,
-				numOfVids,
-			)
-		}
-	}()
-
 	for _, file := range files {
-		f := file.Name()
-		p := filepath.Join(inputDirPath, f)
+		filename := file.Name()
+		fullPath := filepath.Join(inputDirPath, filename)
 
-		// ROUTINE: processes videos
-		wg.Go(func() {
-			filename := f
-			fullPath := p
-			concurrentProcesses <- 1
-			defer func() { <-concurrentProcesses }()
+		// convert video to mp3
+		outputAudioPath, err := VideoToMp3(tempDirPath, fullPath)
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
+			continue
+		}
 
-			// convert video to mp3
-			outputAudioPath, err := VideoToMp3(tempDirPath, fullPath)
-			if err != nil {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-				return
-			}
+		structuredResponse, err := TranscribeVideo(ctx, apiKey, c, outputAudioPath)
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, fmt.Errorf("%v\nerror while transcribing video", err.Error()))
+			mu.Unlock()
+			continue
+		}
 
-			structuredResponse, err := TranscribeVideo(ctx, apiKey, c, outputAudioPath)
-			if err != nil {
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("%v\nerror while transcribing video", err.Error()))
-				mu.Unlock()
-				return
-			}
+		filenameNoExt := strings.TrimSuffix(filepath.Base(fullPath), filepath.Ext(fullPath))
+		strFilePath, err := GenerateSrtFile(&structuredResponse, filenameNoExt, tempDirPath)
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, fmt.Errorf("%v\nerror while saving srt file", err.Error()))
+			mu.Unlock()
+			continue
+		}
 
-			filenameNoExt := strings.TrimSuffix(filepath.Base(fullPath), filepath.Ext(fullPath))
-			strFilePath, err := GenerateSrtFile(&structuredResponse, filenameNoExt, tempDirPath)
-			if err != nil {
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("%v\nerror while saving srt file", err.Error()))
-				mu.Unlock()
-				return
-			}
+		// now that we have the srt file, get ffmpeg to add subtitles
+		// to the original video file
+		tempVideoPath, err := ApplySubtitles(tempDirPath, fullPath, strFilePath)
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
+			continue
+		}
 
-			// now that we have the srt file, get ffmpeg to add subtitles
-			// to the original video file
-			tempVideoPath, err := ApplySubtitles(tempDirPath, fullPath, strFilePath)
-			if err != nil {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-				return
-			}
+		// move the final file from tmp directory to root
+		err = os.Rename(tempVideoPath, "./transcribed_"+filename)
+		if err != nil {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
+			continue
+		}
 
-			// move the final file from tmp directory to root
-			err = os.Rename(tempVideoPath, "./transcribed_"+filename)
-			if err != nil {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-				return
-			}
-
-			progress <- struct{}{}
-
-		})
+		success++
+		spinner.Prefix = fmt.Sprintf(
+			"Transcoding video(s) %d of %d... ",
+			success,
+			numOfVids,
+		)
 	}
 
-	wg.Wait()
-	close(progress)
 	spinner.Stop() // make sure to stop spinner before printing final message
 
 	if len(errs) > 0 {

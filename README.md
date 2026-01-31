@@ -1,6 +1,6 @@
 ## Vidscribe — Gemini-powered Video Transcriptions
 
-Vidscribe is a simple CLI that transcribes a single video or every supported video inside a folder using Google Gemini. It extracts the audio via `ffmpeg`, asks Gemini to break it into segments, writes an SRT file, and then uses `ffmpeg` again to burn the subtitles back onto the original video so you get a ready-to-watch `transcribed_<original>` file.
+Vidscribe is a CLI tool that uses Google Gemini and `ffmpeg` to transcribe videos and burn subtitles into a new `transcribed_<original>` file.
 
 ### What you’ll need
 
