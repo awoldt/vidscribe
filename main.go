@@ -247,7 +247,7 @@ func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Comman
 	}
 
 	// move the final file from tmp directory to root
-	err = os.Rename(tempVideoPath, "./transcribed_"+inputPath)
+	err = os.Rename(tempVideoPath, "transcribed_"+filepath.Base(inputPath))
 	if err != nil {
 		return err
 	}
