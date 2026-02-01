@@ -22,6 +22,8 @@ var validVideoFormats = []string{".mp4", ".mov", ".mkv", ".webm", ".avi"}
 
 func main() {
 	cmd := &cli.Command{
+		Name:  "vidscribe",
+		Usage: "CLI tool to easily add subtitles to videos on your computer",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "input",

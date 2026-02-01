@@ -43,15 +43,24 @@ Vidscribe is a CLI tool that uses Google Gemini and `ffmpeg` to transcribe video
 - Video files: `.mp4`, `.mov`, `.mkv`, `.webm`, `.avi`  
 - Directories that contain any mix of the above video formats. Vidscribe skips non-video files automatically.
 
-### Building & running
+### Usage
 
-```
+```bash
 go build -o vidscribe
 ./vidscribe --input path/to/video.mp4
 ```
 
 Or point at a directory to transcribe everything inside:
 
-```
+```bash
 ./vidscribe --input path/to/video-directory
 ```
+
+#### Flags
+
+| Flag | Description | Default | Required |
+|------|-------------|---------|----------|
+| `--input` | Path to a video file or a directory containing video files to transcribe | - | Yes |
+| `--model` | Underlying Google Gemini model to use for video transcription (`flash` or `pro`) | `flash` | No |
+
+
