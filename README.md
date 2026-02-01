@@ -60,7 +60,7 @@ Or point at a directory to transcribe everything inside:
 
 | Flag | Description | Default | Required |
 |------|-------------|---------|----------|
-| `--input` | Path to a video file or a directory containing video files to transcribe | - | Yes |
-| `--model` | Underlying Google Gemini model to use for video transcription (`flash` or `pro`) | `flash` | No |
+| `input` | Path to a video file or a directory containing video files to transcribe | - | Yes |
+| `model` | Underlying Google Gemini model to use for video transcription (`flash` or `pro`) | `flash` | No |
 
 
