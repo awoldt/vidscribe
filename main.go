@@ -61,20 +61,30 @@ func main() {
 				return fmt.Errorf("GOOGLE_API_KEY is not set")
 			}
 
+			// get the input path scpecified by user
+			// could be a dir or just a single file
 			inputPath := c.String("input")
 			info, err := os.Stat(inputPath)
 			if err != nil {
 				return errors.New("unable to read input path: " + inputPath)
 			}
+
+			// create a tmp folder to place all files while program is
+			tempDirPath, err := os.MkdirTemp("", "transcribe-")
+			if err != nil {
+				return errors.New("error while creating temp folder")
+			}
+			defer os.RemoveAll(tempDirPath) // clean up the tmp files when program done
+
 			if info.IsDir() {
 				// many videos
-				err := transcribeDir(inputPath, apiKey, ctx, c)
+				err := transcribeDir(inputPath, tempDirPath, apiKey, ctx, c)
 				if err != nil {
 					return err
 				}
 			} else {
 				// single video
-				err = transcribeFile(inputPath, apiKey, ctx, c)
+				err = transcribeFile(inputPath, tempDirPath, apiKey, ctx, c)
 				if err != nil {
 					return err
 				}
@@ -89,7 +99,7 @@ func main() {
 	}
 }
 
-func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Command) error {
+func transcribeDir(inputDirPath, tempDirPath, apiKey string, ctx context.Context, c *cli.Command) error {
 	/*
 		transcribes an entire directory.
 
@@ -119,14 +129,12 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 		return fmt.Errorf("failed to traverse directory and its subdirectories")
 	}
 
-	startTime := time.Now()
-
-	// create a tmp folder to place all files while program is running
-	tempDirPath, err := os.MkdirTemp("", "transcribe-")
-	if err != nil {
-		return errors.New("error while creating temp folder")
+	if len(validFiles) == 0 {
+		fmt.Printf("there are no videos to transcribe in '%v' directory\n", inputDirPath)
+		return nil
 	}
-	defer os.RemoveAll(tempDirPath) // clean up the tmp files when program done
+
+	startTime := time.Now()
 
 	var errs []error
 	var mu sync.RWMutex
@@ -206,7 +214,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 	return nil
 }
 
-func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Command) error {
+func transcribeFile(inputPath, tempDirPath, apiKey string, ctx context.Context, c *cli.Command) error {
 	// make sure its a valid video format
 	if fileExt := filepath.Ext(inputPath); !slices.Contains(validVideoFormats, strings.ToLower(fileExt)) {
 		return fmt.Errorf(
@@ -221,13 +229,6 @@ func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Comman
 	spinner.Start()
 
 	startTime := time.Now()
-
-	// create a tmp folder to place all files while program is running
-	tempDirPath, err := os.MkdirTemp("", "transcribe-")
-	if err != nil {
-		return errors.New("error while creating temp folder")
-	}
-	defer os.RemoveAll(tempDirPath) // clean up the tmp files when program done
 
 	// convert video to mp3
 	outputAudioPath, err := VideoToMp3(tempDirPath, inputPath)
