@@ -119,6 +119,8 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 		return fmt.Errorf("failed to traverse directory and its subdirectories")
 	}
 
+	startTime := time.Now()
+
 	// create a tmp folder to place all files while program is running
 	tempDirPath, err := os.MkdirTemp("", "transcribe-")
 	if err != nil {
@@ -199,7 +201,7 @@ func transcribeDir(inputDirPath, apiKey string, ctx context.Context, c *cli.Comm
 		}
 	}
 
-	fmt.Printf("Processed %d videos successfully; %d failed\n", success, len(errs))
+	fmt.Printf("Processed %d videos successfully; %d failed in %.2f seconds\n", success, len(errs), time.Since(startTime).Seconds())
 
 	return nil
 }
@@ -260,6 +262,6 @@ func transcribeFile(inputPath, apiKey string, ctx context.Context, c *cli.Comman
 		return err
 	}
 
-	spinner.FinalMSG = fmt.Sprintf("Transcription completed in %v seconds\n", fmt.Sprintf("%.2f", time.Since(startTime).Seconds()))
+	spinner.FinalMSG = fmt.Sprintf("Transcription completed in %.2f seconds\n", time.Since(startTime).Seconds())
 	return nil
 }
